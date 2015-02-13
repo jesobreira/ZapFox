@@ -10,23 +10,32 @@
             <span class="icon-bar"></span>
           </div><i class="icon icon-tg-title"></i>
         </a>
-
-        <ul class="dropdown-menu">
+        <ul class="dropdown-menu">           
+           <li><a ng-click="openZap()">
+            <i class="icon icon-faq-zapgrupos"></i>ZapGrupos
+          </a></li>
+           <li><a ng-click="openZapMapa()">
+            <i class="icon icon-faq-zapmapa"></i>ZapMapa
+          </a></li>
           <li><a ng-click="openGroup()">
             <i class="icon icon-new-group"></i><span my-i18n="im_new_group"></span>
-          </a></li>
-          <li ng-if="!isEmpty.contacts"><a ng-click="openContacts()">
-            <i class="icon icon-contacts"></i><span my-i18n="im_contacts"></span>
-          </a></li>
+          </a></li> 
+ <li ng-if="!isEmpty.contacts"><a ng-click="openContacts()">
+<i class="icon icon-contacts"></i><span my-i18n="im_contacts"></span>
+</a></li>
           <li><a ng-click="openSettings()">
             <i class="icon icon-settings"></i><span my-i18n="im_settings"></span>
           </a></li>
-          <li><a ng-click="openFaq()">
+          <!--
+          <li><a href="http://zapzap.gratis" target="_blank">
             <i class="icon icon-faq"></i><span my-i18n="head_telegram_faq"></span>
           </a></li>
+          -->
+          <!--
           <li><a href="" ng-click="openChangelog()">
             <i class="icon icon-about"></i><span my-i18n="head_about"></span>
           </a></li>
+          -->
         </ul>
       </div>
     </div>
@@ -74,12 +83,16 @@
 
           <a class="tg_head_btn" ng-switch-default ng-switch="historyPeer.id > 0" ng-click="showPeerInfo()">
             <div class="tg_head_peer_info" ng-switch-when="true">
-              <span class="tg_head_peer_title" my-user-link="historyPeer.id" user-watch="true" dir="auto"></span>
+              <span class="tg_head_peer_title" ng-bind-html="historyPeer.data.rFullName"></span>
               <span class="tg_head_peer_status" my-user-status="historyPeer.id"></span>
             </div>
             <div class="tg_head_peer_info" ng-switch-default>
-              <span class="tg_head_peer_title" my-chat-link="-historyPeer.id" chat-watch="true" dir="auto"></span>
-              <span class="tg_head_peer_status" my-chat-status="-historyPeer.id"></span>
+              <span class="tg_head_peer_title" ng-bind-html="historyPeer.data.rTitle"></span>
+              <span class="tg_head_peer_status">
+                <ng-pluralize count="historyPeer.data.participants_count"
+                                 when="im_pluralize_participants">
+                </ng-pluralize>
+              </span>
             </div>
           </a>
 

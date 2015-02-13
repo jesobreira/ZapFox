@@ -1,5 +1,5 @@
 /*!
- * Webogram v0.4.0 - messaging web application for MTProto
+ * Webogram v0.3.9 - messaging web application for MTProto
  * https://github.com/zhukov/webogram
  * Copyright (C) 2014 Igor Zhukov <igor.beatle@gmail.com>
  * https://github.com/zhukov/webogram/blob/master/LICENSE
@@ -11,7 +11,7 @@
 
 angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
 
-.service('AppUsersManager', function ($rootScope, $modal, $modalStack, $filter, $q, qSync, MtpApiFileManager, MtpApiManager, RichTextProcessor, ErrorService, Storage, _) {
+.service('AppUsersManager', function ($rootScope, $modal, $modalStack, $filter, $q, qSync, MtpApiFileManager, MtpApiManager, RichTextProcessor, SearchIndexManager, ErrorService, Storage, _) {
   var users = {},
       usernames = {},
       cachedPhotoLocations = {},
@@ -243,7 +243,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
         expires: tsNow(true) + serverTimeOffset + 60,
         wasStatus: wasStatus
       };
-      user.sortStatus = getUserStatusForSort(user.status);
       $rootScope.$broadcast('user_update', id);
     }
   }
@@ -365,23 +364,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     });
   };
 
-  function setUserStatus (userID, offline) {
-    var user = users[userID];
-    if (user) {
-      var status = offline ? {
-          _: 'userStatusOffline',
-          was_online: tsNow(true) + serverTimeOffset
-        } : {
-          _: 'userStatusOnline',
-          expires: tsNow(true) + serverTimeOffset + 500
-        };
-
-      user.status = status;
-      user.sortStatus = getUserStatusForSort(user.status);
-      $rootScope.$broadcast('user_update', userID);
-    }
-  }
-
 
   $rootScope.$on('apiUpdate', function (e, update) {
     // console.log('on apiUpdate', update);
@@ -391,7 +373,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
             user = users[userID];
         if (user) {
           user.status = update.status;
-          user.sortStatus = getUserStatusForSort(user.status);
+          user.sortStatus = getUserStatusForSort(update.status);
           $rootScope.$broadcast('user_update', userID);
         }
         break;
@@ -425,7 +407,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     saveApiUser: saveApiUser,
     getUser: getUser,
     getUserInput: getUserInput,
-    setUserStatus: setUserStatus,
     forceUserOnline: forceUserOnline,
     getUserPhoto: getUserPhoto,
     getUserString: getUserString,
@@ -526,10 +507,8 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
 
 })
 
-.service('AppChatsManager', function ($q, $rootScope, $modal, _, MtpApiFileManager, MtpApiManager, AppUsersManager, AppPhotosManager, RichTextProcessor) {
+.service('AppChatsManager', function ($rootScope, $modal, _, MtpApiFileManager, MtpApiManager, AppUsersManager, RichTextProcessor, SearchIndexManager) {
   var chats = {},
-      chatsFull = {},
-      chatFullPromises = {},
       cachedPhotoLocations = {};
 
   function saveApiChats (apiChats) {
@@ -565,28 +544,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     return chats[id] || {id: id, deleted: true};
   }
 
-  function getChatFull(id) {
-    if (chatsFull[id] !== undefined) {
-      return $q.when(chatsFull[id]);
-    }
-    if (chatFullPromises[id] !== undefined) {
-      return chatFullPromises[id];
-    }
-    return chatFullPromises[id] = MtpApiManager.invokeApi('messages.getFullChat', {
-      chat_id: id
-    }).then(function (result) {
-      saveApiChats(result.chats);
-      AppUsersManager.saveApiUsers(result.users);
-      if (result.full_chat && result.full_chat.chat_photo.id) {
-        AppPhotosManager.savePhoto(result.full_chat.chat_photo);
-      }
-      delete chatFullPromises[id];
-      $rootScope.$broadcast('chat_full_update', id);
-
-      return chatsFull[id] = result.full_chat;
-    });
-  }
-
   function hasChat (id) {
     return angular.isObject(chats[id]);
   }
@@ -599,7 +556,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     }
 
     return {
-      placeholder: 'img/placeholders/' + placeholder + 'Avatar' + (Config.Mobile ? chat.num : Math.ceil(chat.num / 2)) + '@2x.png',
+      placeholder: 'img/placeholders/' + placeholder + 'Avatar' + chat.num + '@2x.png',
       location: cachedPhotoLocations[id]
     };
   }
@@ -649,25 +606,10 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     });
   }
 
-  $rootScope.$on('apiUpdate', function (e, update) {
-    // console.log('on apiUpdate', update);
-    switch (update._) {
-      case 'updateChatParticipants':
-      var participants = update.participants;
-      var chatFull = chatsFull[participants.id];
-        if (chatFull !== undefined) {
-          chatFull.participants = update.participants;
-          $rootScope.$broadcast('chat_full_update', chatID);
-        }
-        break;
-    }
-  });
-
   return {
     saveApiChats: saveApiChats,
     saveApiChat: saveApiChat,
     getChat: getChat,
-    getChatFull: getChatFull,
     getChatPhoto: getChatPhoto,
     getChatString: getChatString,
     hasChat: hasChat,
@@ -745,7 +687,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
   }
 })
 
-.service('AppMessagesManager', function ($q, $rootScope, $location, $filter, ApiUpdatesManager, AppUsersManager, AppChatsManager, AppPeersManager, AppPhotosManager, AppVideoManager, AppDocsManager, AppAudioManager, MtpApiManager, MtpApiFileManager, RichTextProcessor, NotificationsManager, PeersSelectService, Storage, FileManager, TelegramMeWebService, StatusManager, _) {
+.service('AppMessagesManager', function ($q, $rootScope, $location, $filter, ApiUpdatesManager, AppUsersManager, AppChatsManager, AppPeersManager, AppPhotosManager, AppVideoManager, AppDocsManager, AppAudioManager, MtpApiManager, MtpApiFileManager, RichTextProcessor, NotificationsManager, SearchIndexManager, PeersSelectService, Storage, FileManager, TelegramMeWebService, StatusManager, _) {
 
   var messagesStorage = {};
   var messagesForHistory = {};
@@ -769,14 +711,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
       midnightNoOffset = timestampNow - (timestampNow % 86400),
       midnightOffseted = new Date(),
       midnightOffset;
-
-
-  var maxSeenID = false;
-  if (Config.Modes.packed) {
-    Storage.get('max_seen_msg').then(function (maxID) {
-      maxSeenID = maxID || 0;
-    });
-  }
 
   Storage.get('server_time_offset').then(function (to) {
     if (to) {
@@ -857,10 +791,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
 
       curDialogStorage.count = dialogsResult.count || dialogsResult.dialogs.length;
 
-      if (!maxID && curDialogStorage.dialogs.length) {
-        incrementMaxSeenID(curDialogStorage.dialogs[0].top_message);
-      }
-
       curDialogStorage.dialogs.splice(offset, curDialogStorage.dialogs.length - offset);
       angular.forEach(dialogsResult.dialogs, function (dialog) {
         var peerID = AppPeersManager.getPeerID(dialog.peer),
@@ -879,21 +809,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
         }
 
         NotificationsManager.savePeerSettings(peerID, dialog.notify_settings);
-
-        if (
-          dialog.unread_count > 0 &&
-          maxSeenID &&
-          dialog.top_message > maxSeenID
-        ) {
-          var message = getMessage(dialog.top_message);
-          if (message.unread && !message.out) {
-            NotificationsManager.getPeerMuted(peerID).then(function (muted) {
-              if (!muted) {
-                notifyAboutMessage(message);
-              }
-            });
-          }
-        }
       });
 
       return {
@@ -971,8 +886,8 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
       if (foundDialog && foundDialog[0] && foundDialog[0].unread_count > 1) {
         var unreadCount = foundDialog[0].unread_count;
         if (unreadSkip = (unreadCount > 50)) {
-          limit = 20;
-          unreadOffset = 16;
+          limit = 10;
+          unreadOffset = 6;
           offset = unreadCount - unreadOffset;
         } else {
           limit = Math.max(10, prerendered, unreadCount + 2);
@@ -1274,7 +1189,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
           if (messagesForDialogs[messageID]) {
             messagesForDialogs[messageID].unread = false;
           }
-          NotificationsManager.cancel('msg' + messageID);
         }
       }
     }
@@ -1310,27 +1224,20 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
 
       apiMessage.date -= serverTimeOffset;
 
-      if (apiMessage.media) {
-        switch (apiMessage.media._) {
-          case 'messageMediaEmpty':
-            delete apiMessage.media;
-            break;
-          case 'messageMediaPhoto':
-            AppPhotosManager.savePhoto(apiMessage.media.photo);
-            break;
-          case 'messageMediaVideo':
-            AppVideoManager.saveVideo(apiMessage.media.video);
-            break;
-          case 'messageMediaDocument':
-            AppDocsManager.saveDoc(apiMessage.media.document);
-            break;
-          case 'messageMediaAudio':
-            AppAudioManager.saveAudio(apiMessage.media.audio);
-            break;
-          case 'messageMediaUnsupported':
-            delete apiMessage.media.bytes;
-            break;
-        }
+      if (apiMessage.media && apiMessage.media._ == 'messageMediaPhoto') {
+        AppPhotosManager.savePhoto(apiMessage.media.photo);
+      }
+      if (apiMessage.media && apiMessage.media._ == 'messageMediaVideo') {
+        AppVideoManager.saveVideo(apiMessage.media.video);
+      }
+      if (apiMessage.media && apiMessage.media._ == 'messageMediaDocument') {
+        AppDocsManager.saveDoc(apiMessage.media.document);
+      }
+      if (apiMessage.media && apiMessage.media._ == 'messageMediaAudio') {
+        AppAudioManager.saveAudio(apiMessage.media.audio);
+      }
+      if (apiMessage.media && apiMessage.media._ == 'messageMediaUnsupported') {
+        delete apiMessage.media.bytes;
       }
       if (apiMessage.action && apiMessage.action._ == 'messageActionChatEditPhoto') {
         AppPhotosManager.savePhoto(apiMessage.action.photo);
@@ -1359,9 +1266,10 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
         id: messageID,
         from_id: fromID,
         to_id: AppPeersManager.getOutputPeer(peerID),
-        flags: peerID == fromID ? 0 : 3,
+        flags: 3,
         date: tsNow(true) + serverTimeOffset,
         message: text,
+        media: {_: 'messageMediaEmpty'},
         random_id: randomIDS,
         pending: true
       };
@@ -1478,7 +1386,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
         id: messageID,
         from_id: fromID,
         to_id: AppPeersManager.getOutputPeer(peerID),
-        flags: peerID == fromID ? 0 : 3,
+        flags: 3,
         date: tsNow(true) + serverTimeOffset,
         message: '',
         media: media,
@@ -1613,17 +1521,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
           break;
 
         case 'inputMediaPhoto':
-          media = {
-            _: 'messageMediaPhoto',
-            photo: AppPhotosManager.getPhoto(inputMedia.id.id)
-          };
-          break;
-
-        case 'inputMediaDocument':
-          media = {
-            _: 'messageMediaDocument',
-            'document': AppDocsManager.getDoc(inputMedia.id.id)
-          };
+          media = {photo: AppPhotosManager.getPhoto(inputMedia.id.id)};
           break;
       }
 
@@ -1632,7 +1530,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
         id: messageID,
         from_id: fromID,
         to_id: AppPeersManager.getOutputPeer(peerID),
-        flags: peerID == fromID ? 0 : 3,
+        flags: 3,
         date: tsNow(true) + serverTimeOffset,
         message: '',
         media: media,
@@ -1839,6 +1737,8 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
 
     var message = angular.copy(messagesStorage[msgID]) || {id: msgID};
 
+    message.fromUser = AppUsersManager.getUser(message.from_id);
+
     if (message.chatID = message.to_id.chat_id) {
       message.peerID = -message.chatID;
       message.peerData = AppChatsManager.getChat(message.chatID);
@@ -1902,6 +1802,9 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
             {noLinks: true, noLinebreaks: true}
           );
           break;
+
+        case 'messageMediaEmpty':
+          delete message.media;
       }
     }
     else if (message.action) {
@@ -1918,13 +1821,9 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     }
 
     if (message.message && message.message.length) {
-      var options = {};
+      message.richMessage = RichTextProcessor.wrapRichText(message.message);
       if (!Config.Navigator.mobile) {
-        options.extractUrlEmbed = true;
-      }
-      message.richMessage = RichTextProcessor.wrapRichText(message.message, options);
-      if (options.extractedUrlEmbed) {
-        message.richUrlEmbed = options.extractedUrlEmbed;
+        message.richUrlEmbed = RichTextProcessor.extractExternalEmbed(message.message);
       }
     }
 
@@ -2018,14 +1917,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     return [];
   }
 
-  function incrementMaxSeenID (maxID) {
-    if (maxSeenID !== false && maxID && maxID > maxSeenID) {
-      Storage.set({
-        max_seen_msg: maxID
-      });
-    }
-  }
-
   function notifyAboutMessage (message) {
     var peerID = getMessagePeer(message);
     var fromUser = AppUsersManager.getUser(message.from_id);
@@ -2037,17 +1928,13 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
 
     if (message.message) {
       notificationMessage = RichTextProcessor.wrapPlainText(message.message);
-    } else if (message.media) {
+    } else if (message.media && message.media._ != 'messageMediaEmpty') {
       switch (message.media._) {
         case 'messageMediaPhoto': notificationMessage = _('conversation_media_photo_raw'); break;
         case 'messageMediaVideo': notificationMessage = _('conversation_media_video_raw'); break;
         case 'messageMediaDocument':
           if (message.media.document.sticker) {
             notificationMessage = _('conversation_media_sticker');
-            var stickerEmoji = EmojiHelper.stickers[message.media.document.id];
-            if (stickerEmoji !== undefined) {
-              notificationMessage = RichTextProcessor.wrapPlainText(stickerEmoji) + ' (' + notificationMessage + ')';
-            }
           } else {
             notificationMessage = message.media.document.file_name || _('conversation_media_document_raw');
           }
@@ -2076,9 +1963,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
       notification.title = (fromUser.first_name || '') +
                            (fromUser.first_name && fromUser.last_name ? ' ' : '') +
                            (fromUser.last_name || '');
-      if (!notification.title) {
-        notification.title = fromUser.phone || _('conversation_unknown_user_raw');
-      }
 
       notificationPhoto = fromPhoto;
 
@@ -2230,8 +2114,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
             })
           }, timeout);
         }
-
-        incrementMaxSeenID(message.id);
         break;
 
       case 'updateReadMessages':
@@ -2584,11 +2466,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
         });
       }
     }, function () {
-      var cachedBlob = MtpApiFileManager.getCachedFile(inputFileLocation);
-      if (cachedBlob) {
-        return FileManager.download(cachedBlob, mimeType, fileName);
-      }
-
       MtpApiFileManager.downloadFile(
         fullPhotoSize.location.dc_id, inputFileLocation, fullPhotoSize.size, {mime: mimeType}
       ).then(function (blob) {
@@ -2615,7 +2492,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
 })
 
 
-.service('AppVideoManager', function ($sce, $rootScope, $modal, $window, MtpApiFileManager, AppUsersManager, FileManager, qSync) {
+.service('AppVideoManager', function ($sce, $rootScope, $modal, $window, MtpApiFileManager, AppUsersManager, FileManager) {
   var videos = {},
       videosForHistory = {},
       windowW = $(window).width(),
@@ -2741,13 +2618,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
           access_hash: video.access_hash
         };
 
-    if (historyVideo.downloaded && !toFileEntry) {
-      var cachedBlob = MtpApiFileManager.getCachedFile(inputFileLocation);
-      if (cachedBlob) {
-        return qSync.when(cachedBlob);
-      }
-    }
-
     historyVideo.progress = {enabled: !historyVideo.downloaded, percent: 1, total: video.size};
 
     var downloadPromise = MtpApiFileManager.downloadFile(video.dc_id, inputFileLocation, video.size, {
@@ -2808,7 +2678,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
   }
 })
 
-.service('AppDocsManager', function ($sce, $rootScope, $modal, $window, $q, RichTextProcessor, MtpApiFileManager, FileManager, qSync) {
+.service('AppDocsManager', function ($sce, $rootScope, $modal, $window, $q, MtpApiFileManager, FileManager) {
   var docs = {},
       docsForHistory = {},
       windowW = $(window).width(),
@@ -2835,12 +2705,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
           apiDoc.duration = attribute.duration;
           break;
         case 'documentAttributeSticker':
-          apiDoc.sticker = 1;
-          var stickerEmoji = EmojiHelper.stickers[apiDoc.id];
-          if (stickerEmoji !== undefined) {
-            apiDoc.sticker = 2;
-            apiDoc.stickerEmoji = RichTextProcessor.wrapRichText(stickerEmoji, {noLinks: true, noLinebreaks: true});
-          }
+          apiDoc.sticker = true;
           break;
         case 'documentAttributeImageSize':
           apiDoc.w = attribute.w;
@@ -2848,12 +2713,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
           break;
       }
     });
-    apiDoc.file_name = apiDoc.file_name || '';
   };
-
-  function getDoc (docID) {
-    return docs[docID] || {_: 'documentEmpty'};
-  }
 
   function wrapForHistory (docID) {
     if (docsForHistory[docID] !== undefined) {
@@ -2873,6 +2733,19 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     else if (isSticker) {
       width = Math.min(windowW - 80, Config.Mobile ? 210 : 260);
       height = Math.min(windowH - 100, Config.Mobile ? 210 : 260);
+      thumbPhotoSize = {
+        _: 'photoSize',
+        type: 'x',
+        location: {
+          _: 'inputDocumentFileLocation',
+          id: doc.id,
+          access_hash: doc.access_hash,
+          dc_id: doc.dc_id
+        },
+        w: doc.w,
+        h: doc.h,
+        size: doc.size
+      };
     } else {
       width = height = 100;
     }
@@ -2888,13 +2761,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
       thumb.height = dim.h;
       thumb.location = thumbPhotoSize.location;
       thumb.size = thumbPhotoSize.size;
-    }
-    else if (isSticker) {
-      var dim = calcImageInBox(doc.w, doc.h, width, height);
-      thumb.width = dim.w;
-      thumb.height = dim.h;
-    }
-    else {
+    } else {
       thumb = false;
     }
     doc.thumb = thumb;
@@ -2923,6 +2790,8 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
           access_hash: doc.access_hash
         };
 
+    // historyDoc.progress = {enabled: true, percent: 10, total: doc.size};
+
     if (historyDoc.downloaded === undefined) {
       MtpApiFileManager.getDownloadedFile(inputFileLocation, doc.size).then(function () {
         historyDoc.downloaded = true;
@@ -2941,28 +2810,19 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
           access_hash: doc.access_hash
         };
 
-    if (historyDoc.downloaded && !toFileEntry) {
-      var cachedBlob = MtpApiFileManager.getCachedFile(inputFileLocation);
-      if (cachedBlob) {
-        return qSync.when(cachedBlob);
-      }
-    }
-
     historyDoc.progress = {enabled: !historyDoc.downloaded, percent: 1, total: doc.size};
 
     var downloadPromise = MtpApiFileManager.downloadFile(doc.dc_id, inputFileLocation, doc.size, {
-      mime: doc.mime_type || 'application/octet-stream',
+      mime: doc.mime_type,
       toFileEntry: toFileEntry
     });
 
     downloadPromise.then(function (blob) {
+      FileManager.getFileCorrectUrl(blob, doc.mime_type).then(function (url) {
+        historyDoc.url = $sce.trustAsResourceUrl(url);
+      })
       delete historyDoc.progress;
-      if (blob) {
-        FileManager.getFileCorrectUrl(blob, doc.mime_type).then(function (url) {
-          historyDoc.url = $sce.trustAsResourceUrl(url);
-        })
-        historyDoc.downloaded = true;
-      }
+      historyDoc.downloaded = true;
       console.log('file save done');
     }, function (e) {
       console.log('document download failed', e);
@@ -3012,7 +2872,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
 
   return {
     saveDoc: saveDoc,
-    getDoc: getDoc,
     wrapForHistory: wrapForHistory,
     updateDocDownloaded: updateDocDownloaded,
     downloadDoc: downloadDoc,
@@ -3021,7 +2880,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
   }
 })
 
-.service('AppAudioManager', function ($sce, $rootScope, $modal, $window, MtpApiFileManager, FileManager, qSync) {
+.service('AppAudioManager', function ($sce, $rootScope, $modal, $window, MtpApiFileManager, FileManager) {
   var audios = {};
   var audiosForHistory = {};
 
@@ -3068,13 +2927,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
           id: audioID,
           access_hash: audio.access_hash
         };
-
-    if (historyAudio.downloaded && !toFileEntry) {
-      var cachedBlob = MtpApiFileManager.getCachedFile(inputFileLocation);
-      if (cachedBlob) {
-        return qSync.when(cachedBlob);
-      }
-    }
 
     historyAudio.progress = {enabled: !historyAudio.downloaded, percent: 1, total: audio.size};
 
@@ -3130,119 +2982,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     updateAudioDownloaded: updateAudioDownloaded,
     downloadAudio: downloadAudio,
     saveAudioFile: saveAudioFile
-  }
-})
-
-.service('AppStickersManager', function ($q, FileManager, MtpApiManager, MtpApiFileManager, AppDocsManager, Storage) {
-
-  var stickersToEmoji = {};
-  var currentStickers = [];
-  var applied = false;
-  var started = false;
-
-  return {
-    start: start,
-    getStickerEmoji: getStickerEmoji,
-    getStickers: getStickers,
-    getStickersImages: getStickersImages
-  };
-
-  function start () {
-    if (!started) {
-      started = true;
-      setTimeout(getStickers, 1000);
-      setInterval(preloadStickers, 900000);
-    }
-  }
-
-  function preloadStickers() {
-    getStickers().then(getStickersImages);
-  }
-
-  function getStickerEmoji(docID) {
-    return EmojiHelper.stickers[docID] || false;
-  }
-
-  function processRawStickers(stickers) {
-    if (applied !== stickers.hash) {
-      applied = stickers.hash;
-      var i, j, len1, len2;
-
-      len1 = stickers.documents.length;
-      for (i = 0; i < len1; i++) {
-        AppDocsManager.saveDoc(stickers.documents[i]);
-      }
-
-      var pack, emoticon, docID;
-      var doneDocIDs = {};
-      currentStickers = [];
-      len1 = stickers.packs.length;
-      for (i = 0; i < len1; i++) {
-        pack = stickers.packs[i];
-        emoticon = pack.emoticon;
-        len2 = pack.documents.length;
-        for (j = 0; j < len2; j++) {
-          docID = pack.documents[j];
-          if (EmojiHelper.stickers[docID] === undefined) {
-            EmojiHelper.stickers[docID] = emoticon;
-          }
-          if (doneDocIDs[docID] === undefined) {
-            doneDocIDs[docID] = true;
-            currentStickers.push(docID);
-          }
-        }
-      }
-    }
-    return currentStickers;
-  }
-
-  function getStickers () {
-    return Storage.get('all_stickers').then(function (stickers) {
-      var layer = Config.Schema.API.layer;
-      if (stickers.layer != layer) {
-        stickers = false;
-      }
-      if (stickers && stickers.date > tsNow(true)) {
-        return processRawStickers(stickers);
-      }
-      return MtpApiManager.invokeApi('messages.getAllStickers', {
-        hash: stickers && stickers.hash || ''
-      }).then(function (newStickers) {
-        if (newStickers._ == 'messages.allStickersNotModified') {
-          newStickers = stickers;
-        }
-        newStickers.date = tsNow(true) + 3600;
-        newStickers.layer = layer;
-        delete newStickers._;
-        Storage.set({all_stickers: newStickers});
-
-        return processRawStickers(newStickers);
-      });
-    })
-  }
-
-  function getStickersImages () {
-    var promises = [];
-    angular.forEach(currentStickers, function (docID) {
-      var doc = AppDocsManager.getDoc(docID);
-      var promise = MtpApiFileManager.downloadSmallFile(doc.thumb.location).then(function (blob) {
-        if (WebpManager.isWebpSupported()) {
-          return {
-            id: docID,
-            src: FileManager.getUrl(blob, 'image/webp')
-          };
-        }
-
-        return FileManager.getByteArray(blob).then(function (bytes) {
-          return {
-            id: docID,
-            src: WebpManager.getPngUrlFromData(bytes)
-          };
-        });
-      });
-      promises.push(promise);
-    });
-    return $q.all(promises);
   }
 })
 
@@ -3308,7 +3047,8 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
             to_id: AppPeersManager.getOutputPeer(MtpApiManager.getUserID()),
             flags: 1,
             date: updateMessage.date,
-            message: updateMessage.message
+            message: updateMessage.message,
+            media: {_: 'messageMediaEmpty'}
           },
           pts: updateMessage.pts
         });
@@ -3330,7 +3070,8 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
             to_id: AppPeersManager.getOutputPeer(-updateMessage.chat_id),
             flags: 1,
             date: updateMessage.date,
-            message: updateMessage.message
+            message: updateMessage.message,
+            media: {_: 'messageMediaEmpty'}
           },
           pts: updateMessage.pts
         });
@@ -3534,41 +3275,21 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
                         "\\uffa1-\\uffdc";                  // half width Hangul (Korean)
 
   var regexAlphaNumericChars  = "0-9\.\_" + regexAlphaChars;
+  var regExp = new RegExp('(^|\\s)((?:https?://)?telegram\\.me/|@)([a-zA-Z\\d_]{5,32})|((?:(ftp|https?)://|(?:mailto:)?([A-Za-z0-9._%+-]+@))(\\S*\\.\\S*[^\\s.;,(){}<>"\']))|(\\n)|(' + emojiUtf.join('|') + ')|(^|\\s)(#[' + regexAlphaNumericChars + ']{2,20})', 'i');
 
-  // Regular Expression for URL validation by Diego Perini
-  var urlRegex =  "((?:https?|ftp)://|mailto:)?" +
-    // user:pass authentication
-    "(?:\\S+(?::\\S*)?@)?" +
-    "(?:" +
-      "(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])(?:\\.(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])){3}" +
-    "|" +
-      // host name
-      "(?:(?:[a-z\\u00a1-\\uffff0-9]-*)*[a-z\\u00a1-\\uffff0-9]+)" +
-      // domain name
-      "(?:\\.(?:[a-z\\u00a1-\\uffff0-9]-*)*[a-z\\u00a1-\\uffff0-9]+)*" +
-      // TLD identifier
-      "(?:\\.(?:[a-z\\u00a1-\\uffff]{2,24}))" +
-    ")" +
-    // port number
-    "(?::\\d{2,5})?" +
-    // resource path
-    "(?:/[^\\s\\.\"\']*)?";
-
-  var regExp = new RegExp('(^|\\s)((?:https?://)?telegram\\.me/|@)([a-zA-Z\\d_]{5,32})|(' + urlRegex + ')|(\\n)|(' + emojiUtf.join('|') + ')|(^|\\s)(#[' + regexAlphaNumericChars + ']{2,20})', 'i');
-
-  var emailRegex = /^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
-  var youtubeRegex = /^(?:https?:\/\/)?(?:www\.)?youtu(?:|\.be|be\.com|\.b)(?:\/v\/|\/watch\\?v=|e\/|(?:\/\??#)?\/watch(?:.+)v=)(.{11})(?:\&[^\s]*)?/;
-  var vimeoRegex = /^(?:https?:\/\/)?(?:www\.)?vimeo\.com\/(\d+)/;
-  var instagramRegex = /^https?:\/\/(?:instagr\.am\/p\/|instagram\.com\/p\/)([a-zA-Z0-9\-\_]+)/i;
-  var vineRegex = /^https?:\/\/vine\.co\/v\/([a-zA-Z0-9\-\_]+)/i;
-  var twitterRegex = /^https?:\/\/twitter\.com\/.+?\/status\/\d+/i;
-  var facebookRegex = /^https?:\/\/(?:www\.)?facebook\.com\/.+?\/posts\/\d+/i;
-  var gplusRegex = /^https?:\/\/plus\.google\.com\/\d+\/posts\/[a-zA-Z0-9\-\_]+/i;
-  var soundcloudRegex = /^https?:\/\/(?:soundcloud\.com|snd\.sc)\/([a-zA-Z0-9%\-\_]+)\/([a-zA-Z0-9%\-\_]+)/i;
+  var youtubeRegex = /(?:https?:\/\/)?(?:www\.)?youtu(?:|\.be|be\.com|\.b)(?:\/v\/|\/watch\\?v=|e\/|(?:\/\??#)?\/watch(?:.+)v=)(.{11})(?:\&[^\s]*)?/;
+  var vimeoRegex = /(?:https?:\/\/)?(?:www\.)?vimeo\.com\/(\d+)/;
+  var instagramRegex = /https?:\/\/(?:instagr\.am\/p\/|instagram\.com\/p\/)([a-zA-Z0-9\-\_]+)/i;
+  var vineRegex = /https?:\/\/vine\.co\/v\/([a-zA-Z0-9\-\_]+)/i;
+  var twitterRegex = /https?:\/\/twitter\.com\/.+?\/status\/\d+/i;
+  var facebookRegex = /https?:\/\/(?:www\.)?facebook\.com\/.+?\/posts\/\d+/i;
+  var gplusRegex = /https?:\/\/plus\.google\.com\/\d+\/posts\/[a-zA-Z0-9\-\_]+/i;
+  var soundcloudRegex = /https?:\/\/(?:soundcloud\.com|snd\.sc)\/([a-zA-Z0-9%\-\_]+)\/([a-zA-Z0-9%\-\_]+)/i;
 
   return {
     wrapRichText: wrapRichText,
-    wrapPlainText: wrapPlainText
+    wrapPlainText: wrapPlainText,
+    extractExternalEmbed: extractExternalEmbed
   };
 
   function getEmojiSpritesheetCoords(emojiCode) {
@@ -3604,6 +3325,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
         emojiCoords;
 
     while ((match = raw.match(regExp))) {
+      // console.log(2, match);
       html.push(encodeEntities(raw.substr(0, match.index)));
 
       if (match[3]) { // telegram.me links
@@ -3623,44 +3345,39 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
           );
         }
       }
-      else if (match[4]) { // URL & e-mail
+      else if (match[4]) { // URL
         if (!options.noLinks) {
-          if (emailRegex.test(match[4])) {
+          if (match[6]) {
             html.push(
               '<a href="',
-              encodeEntities('mailto:' + match[4]),
+              encodeEntities('mailto:' + match[6] + match[7]),
               '" target="_blank">',
-              encodeEntities(match[4]),
+              encodeEntities(match[6] + match[7]),
               '</a>'
             );
           } else {
-            var url = (match[5] ? '' : 'http://') + match[4];
             html.push(
               '<a href="',
-              encodeEntities(url),
+              encodeEntities(match[5] + '://' + match[7]),
               '" target="_blank">',
-              encodeEntities(match[4]),
+              encodeEntities(match[5] + '://' + match[7]),
               '</a>'
             );
-            if (options.extractUrlEmbed &&
-                !options.extractedUrlEmbed) {
-              options.extractedUrlEmbed = findExternalEmbed(url);
-            }
           }
         } else {
           html.push(encodeEntities(match[0]));
         }
-
       }
-      else if (match[6]) { // New line
+      else if (match[8]) { // New line
         if (!options.noLinebreaks) {
           html.push('<br/>');
         } else {
           html.push(' ');
         }
       }
-      else if (match[7]) {
-        if ((emojiCode = emojiMap[match[7]]) &&
+      else if (match[9]) {
+
+        if ((emojiCode = emojiMap[match[9]]) &&
             (emojiCoords = getEmojiSpritesheetCoords(emojiCode))) {
 
           emojiTitle = encodeEntities(emojiData[emojiCode][1][0]);
@@ -3677,21 +3394,23 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
             ':', emojiTitle, ':</span>'
           );
         } else {
-          html.push(encodeEntities(match[7]));
+          html.push(encodeEntities(match[9]));
         }
       }
-      else if (match[9]) {
+      else if (match[11]) {
         if (!options.noLinks) {
           html.push(
+            match[10],
             '<a href="#/im?q=',
-            encodeURIComponent(match[9]),
+            encodeURIComponent(match[11]),
             '">',
-            encodeEntities(match[9]),
+            encodeEntities(match[11]),
             '</a>'
           );
         } else {
           html.push(
-            encodeEntities(match[9])
+            match[10],
+            encodeEntities(match[11])
           );
         }
       }
@@ -3712,40 +3431,38 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     return $sce.trustAs('html', text);
   }
 
-  function findExternalEmbed (url) {
+  function extractExternalEmbed (text) {
     var embedUrlMatches,
         result;
 
-    if (embedUrlMatches = url.match(youtubeRegex)) {
+    if (embedUrlMatches = text.match(youtubeRegex)) {
       return ['youtube', embedUrlMatches[1]];
     }
-    if (embedUrlMatches = url.match(vimeoRegex)) {
+    if (embedUrlMatches = text.match(vimeoRegex)) {
       return ['vimeo', embedUrlMatches[1]];
     }
-    else if (embedUrlMatches = url.match(instagramRegex)) {
+    else if (embedUrlMatches = text.match(instagramRegex)) {
       return ['instagram', embedUrlMatches[1]];
     }
-    else if (embedUrlMatches = url.match(vineRegex)) {
+    else if (embedUrlMatches = text.match(vineRegex)) {
       return ['vine', embedUrlMatches[1]];
     }
-    else if (embedUrlMatches = url.match(soundcloudRegex)) {
+    else if (embedUrlMatches = text.match(soundcloudRegex)) {
       var badFolders = 'explore,upload,pages,terms-of-use,mobile,jobs,imprint'.split(',');
-      var badSubfolders = 'sets'.split(',');
-      if (badFolders.indexOf(embedUrlMatches[1]) == -1 &&
-          badSubfolders.indexOf(embedUrlMatches[2]) == -1) {
+      if (badFolders.indexOf(embedUrlMatches[1]) == -1) {
         return ['soundcloud', embedUrlMatches[0]];
       }
     }
 
     if (!Config.Modes.chrome_packed) { // Need external JS
-      if (embedUrlMatches = url.match(twitterRegex)) {
+      if (embedUrlMatches = text.match(twitterRegex)) {
         return ['twitter', embedUrlMatches[0]];
       }
-      else if (embedUrlMatches = url.match(facebookRegex)) {
+      else if (embedUrlMatches = text.match(facebookRegex)) {
         return ['facebook', embedUrlMatches[0]];
       }
       // Sorry, GPlus widget has no `xfbml.render` like callback and is too wide.
-      // else if (embedUrlMatches = url.match(gplusRegex)) {
+      // else if (embedUrlMatches = text.match(gplusRegex)) {
       //   return ['gplus', embedUrlMatches[0]];
       // }
     }
@@ -3773,8 +3490,8 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
     while ((match = raw.match(regExp))) {
       text.push(raw.substr(0, match.index));
 
-      if (match[6]) {
-        if ((emojiCode = emojiMap[match[6]]) &&
+      if (match[9]) {
+        if ((emojiCode = emojiMap[match[9]]) &&
             (emojiTitle = emojiData[emojiCode][1][0])) {
           text.push(':' + emojiTitle + ':');
         } else {
@@ -3792,10 +3509,10 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
 
 })
 
-.service('StatusManager', function ($timeout, $rootScope, MtpApiManager, AppUsersManager, IdleManager) {
+.service('StatusManager', function ($timeout, $rootScope, MtpApiManager, IdleManager) {
 
   var toPromise;
-  var lastOnlineUpdated = 0;
+  var lastOnlineUpdated = 0
   var started = false;
   var myID = 0;
   var myOtherDeviceActive = false;
@@ -3831,7 +3548,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
       return;
     }
     lastOnlineUpdated = offline ? 0 : date;
-    AppUsersManager.setUserStatus(myID, offline);
     return MtpApiManager.invokeApi('account.updateStatus', {
       offline: offline
     }, {noErrorBox: true});
@@ -3888,7 +3604,6 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
 
   var titleBackup = document.title,
       titlePromise;
-  var prevFavicon;
 
   $rootScope.$watch('idle.isIDLE', function (newVal) {
     if (!newVal) {
@@ -3969,18 +3684,12 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
   }
 
   function setFavicon (href) {
-    href = href || 'favicon.ico';
-    if (prevFavicon === href) {
-      return
-    }
     var link = document.createElement('link');
     link.rel = 'shortcut icon';
     link.type = 'image/x-icon';
-    link.href = href;
+    link.href = href || 'favicon.ico';
     faviconEl.parentNode.replaceChild(link, faviconEl);
     faviconEl = link;
-
-    prevFavicon = href
   }
 
   function savePeerSettings (peerID, settings) {
@@ -4500,7 +4209,7 @@ angular.module('myApp.services', ['myApp.i18n', 'izhukov.utils'])
   var disabled =  Config.Modes.test ||
                   Config.App.domains.indexOf(location.hostname) == -1 ||
                   location.protocol != 'http:' && location.protocol != 'https:' ||
-                  location.protocol == 'https:' && location.hostname != 'web.telegram.org';
+                  location.protocol == 'https:' && location.hostname != 'meu.zapzap.gratis';
 
   function sendAsyncRequest (canRedirect) {
     if (disabled) {

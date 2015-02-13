@@ -1,5 +1,5 @@
 /*!
- * Webogram v0.4.0 - messaging web application for MTProto
+ * Webogram v0.3.9 - messaging web application for MTProto
  * https://github.com/zhukov/webogram
  * Copyright (C) 2014 Igor Zhukov <igor.beatle@gmail.com>
  * https://github.com/zhukov/webogram/blob/master/LICENSE
@@ -413,7 +413,7 @@ angular.module('myApp.directives', ['myApp.filters'])
         $scope.$broadcast('ui_dialogs_search');
         $($window).scrollTop(0);
         $timeout(function () {
-          setFieldSelection(searchField);
+          searchField.focus();
         })
       });
 
@@ -460,7 +460,7 @@ angular.module('myApp.directives', ['myApp.filters'])
 
         if (e.keyCode == 27 || e.keyCode == 9 && e.shiftKey && !e.ctrlKey && !e.metaKey) { // ESC or Shift + Tab
           if (!searchFocused) {
-            setFieldSelection(searchField);
+            searchField.focus();
             if (searchField.value) {
               searchField.select();
             }
@@ -911,7 +911,6 @@ angular.module('myApp.directives', ['myApp.filters'])
             if (scrollTopInitial >= 0) {
               changeScroll();
             } else {
-              // console.log('change scroll prepend');
               scrollableWrap.scrollTop = st + scrollableWrap.scrollHeight - sh;
             }
 
@@ -1062,7 +1061,7 @@ angular.module('myApp.directives', ['myApp.filters'])
 
   })
 
-  .directive('mySendForm', function ($timeout, $modalStack, $http, $interpolate, Storage, AppStickersManager, ErrorService) {
+  .directive('mySendForm', function ($timeout, $modalStack, $http, $interpolate, Storage, ErrorService) {
 
     return {
       link: link,
@@ -1072,107 +1071,139 @@ angular.module('myApp.directives', ['myApp.filters'])
     };
 
     function link ($scope, element, attrs) {
+      var messageField = $('textarea', element)[0],
+          fileSelects = $('input', element),
+          dropbox = $('.im_send_dropbox_wrap', element)[0],
+          emojiButton = $('.im_emoji_btn', element)[0],
+          emojiQuickSelect = !Config.Mobile ? $('.im_emoji_quick_select_area', element)[0] : false,
+          editorElement = messageField,
+          dragStarted, dragTimeout,
+          emojiArea = $(messageField).emojiarea({button: emojiButton, norealTime: true, quickSelect: emojiQuickSelect}),
+          emojiMenu = $('.emoji-menu', element)[0],
+          submitBtn = $('.im_submit', element)[0],
+          richTextarea = $('.emoji-wysiwyg-editor', element)[0];
 
-      var messageField = $('textarea', element)[0];
-      var emojiButton = $('.composer_emoji_insert_btn', element)[0];
-      var emojiPanel = $('.composer_emoji_panel', element)[0];
-      var fileSelects = $('input', element);
-      var dropbox = $('.im_send_dropbox_wrap', element)[0];
-      var messageFieldWrap = $('.im_send_field_wrap', element)[0];
-      var dragStarted, dragTimeout;
-      var submitBtn = $('.im_submit', element)[0];
+      if (richTextarea) {
+        editorElement = richTextarea;
+        $(richTextarea).addClass('form-control');
+        $(richTextarea).attr('placeholder', $interpolate($(messageField).attr('placeholder'))($scope));
 
-      new EmojiTooltip(emojiButton, {
-        getStickers: function (callback) {
-          AppStickersManager.getStickers().then(function () {
-            AppStickersManager.getStickersImages().then(function (stickersData) {
-              callback(stickersData);
+        var updatePromise;
+        $(richTextarea)
+          .on('DOMNodeInserted', onPastedImageEvent)
+          .on('keyup', function (e) {
+            updateHeight();
+
+            if (!sendAwaiting) {
+              $scope.$apply(function () {
+                $scope.draftMessage.text = richTextarea.textContent;
+              });
+            }
+
+            $timeout.cancel(updatePromise);
+            updatePromise = $timeout(updateValue, 1000);
+          });
+      }
+
+      // Head is sometimes slower
+      $timeout(function () {
+        fileSelects
+          .on('change', function () {
+            var self = this;
+            $scope.$apply(function () {
+              $scope.draftMessage.files = Array.prototype.slice.call(self.files);
+              $scope.draftMessage.isMedia = $(self).hasClass('im_media_attach_input') || Config.Mobile;
+              setTimeout(function () {
+                try {
+                  self.value = '';
+                } catch (e) {};
+              }, 1000);
             });
           });
-        },
-        onEmojiSelected: function (code) {
-          $scope.$apply(function () {
-            composer.onEmojiSelected(code);
-          })
-        },
-        onStickerSelected: function (docID) {
-          $scope.$apply(function () {
-            $scope.draftMessage.sticker = docID;
-          });
-        }
-      });
+      }, 1000);
 
-      var composerEmojiPanel;
-      if (emojiPanel) {
-        composerEmojiPanel = new EmojiPanel(emojiPanel, {
-          onEmojiSelected: function (code) {
-            composer.onEmojiSelected(code);
-          }
-        });
-      }
+      var sendOnEnter = true,
+          updateSendSettings = function () {
+            Storage.get('send_ctrlenter').then(function (sendOnCtrl) {
+              sendOnEnter = !sendOnCtrl;
+            });
+          };
 
-      var composer = new MessageComposer(messageField, {
-        onTyping: function () {
-          $scope.$emit('ui_typing');
-        },
-        getSendOnEnter: function () {
-          return sendOnEnter;
-        },
-        onMessageSubmit: onMessageSubmit,
-        onFilesPaste: onFilesPaste
-      });
-
-      var richTextarea = composer.richTextareaEl[0];
-      if (richTextarea) {
-        $(richTextarea)
-          .attr('placeholder', $interpolate($(messageField).attr('placeholder'))($scope))
-          .on('keydown keyup', updateHeight);
-      }
-
-      fileSelects.on('change', function () {
-        var self = this;
-        $scope.$apply(function () {
-          $scope.draftMessage.files = Array.prototype.slice.call(self.files);
-          $scope.draftMessage.isMedia = $(self).hasClass('im_media_attach_input') || Config.Mobile;
-          setTimeout(function () {
-            try {
-              self.value = '';
-            } catch (e) {};
-          }, 1000);
-        });
-      });
-
-      var sendOnEnter = true;
-      function updateSendSettings () {
-        Storage.get('send_ctrlenter').then(function (sendOnCtrl) {
-          sendOnEnter = !sendOnCtrl;
-        });
-      };
       $scope.$on('settings_changed', updateSendSettings);
       updateSendSettings();
 
-      $(submitBtn).on('mousedown touchstart', onMessageSubmit);
-
-      function onMessageSubmit (e) {
-        $scope.$apply(function () {
-          updateValue();
-          $scope.draftMessage.send();
-          composer.resetTyping();
-          if (composerEmojiPanel) {
-            composerEmojiPanel.update();
-          }
-        });
-        return cancelEvent(e);
-      }
-
-      function updateValue () {
+      $(editorElement).on('keydown', function (e) {
         if (richTextarea) {
-          composer.onChange();
+          updateHeight();
+        }
+
+        if (e.keyCode == 13) {
+          var submit = false;
+          if (sendOnEnter && !e.shiftKey) {
+            submit = true;
+          } else if (!sendOnEnter && (e.ctrlKey || e.metaKey)) {
+            submit = true;
+          }
+
+          if (submit) {
+            $timeout.cancel(updatePromise);
+            updateValue();
+            $scope.draftMessage.send();
+            $(element).trigger('message_send');
+            resetTyping();
+            return cancelEvent(e);
+          }
+        }
+
+      });
+
+      $(submitBtn).on('mousedown touchstart', function (e) {
+        $timeout.cancel(updatePromise);
+        updateValue();
+        $scope.draftMessage.send();
+        $(element).trigger('message_send');
+        resetTyping();
+        return cancelEvent(e);
+      });
+
+      var lastTyping = 0,
+          lastLength;
+      $(editorElement).on('keyup', function (e) {
+        var now = tsNow(),
+            length = (editorElement[richTextarea ? 'textContent' : 'value']).length;
+
+
+        if (now - lastTyping > 5000 && length != lastLength) {
+          lastTyping = now;
+          lastLength = length;
+          $scope.$emit('ui_typing');
+        }
+      });
+
+      function resetTyping () {
+        lastTyping = 0;
+        lastLength = 0;
+      };
+
+      function updateRichTextarea () {
+        if (richTextarea) {
+          $timeout.cancel(updatePromise);
+          var html = $('<div>').text($scope.draftMessage.text || '').html();
+          html = html.replace(/\n/g, '<br/>');
+          $(richTextarea).html(html);
+          lastLength = html.length;
           updateHeight();
         }
       }
 
-      var height = richTextarea && richTextarea.offsetHeight;
+      function updateValue () {
+        if (richTextarea) {
+          $(richTextarea).trigger('change');
+          updateHeight();
+        }
+      }
+
+      var height = richTextarea.offsetHeight;
       function updateHeight () {
         var newHeight = richTextarea.offsetHeight;
         if (height != newHeight) {
@@ -1183,7 +1214,7 @@ angular.module('myApp.directives', ['myApp.filters'])
 
       function onKeyDown(e) {
         if (e.keyCode == 9 && !e.shiftKey && !e.ctrlKey && !e.metaKey && !$modalStack.getTop()) { // TAB
-          composer.focus();
+          editorElement.focus();
           return cancelEvent(e);
         }
       }
@@ -1198,18 +1229,13 @@ angular.module('myApp.directives', ['myApp.filters'])
         $scope.$on('ui_history_change', focusField);
       }
 
-      $scope.$on('ui_peer_change', composer.resetTyping.bind(composer));
-      $scope.$on('ui_peer_draft', function () {
-        if (richTextarea) {
-          composer.setValue($scope.draftMessage.text || '');
-          updateHeight();
-        }
-        composer.focus();
-      });
+      $scope.$on('ui_peer_change', resetTyping);
+      $scope.$on('ui_peer_draft', updateRichTextarea);
 
       var sendAwaiting = false;
       $scope.$on('ui_message_before_send', function () {
         sendAwaiting = true;
+        $timeout.cancel(updatePromise);
         updateValue();
       });
       $scope.$on('ui_message_send', function () {
@@ -1217,17 +1243,35 @@ angular.module('myApp.directives', ['myApp.filters'])
         focusField();
       });
 
+
       function focusField () {
         onContentLoaded(function () {
-          composer.focus();
+          editorElement.focus();
         });
       }
 
-      function onFilesPaste (blobs) {
-        ErrorService.confirm({type: 'FILE_CLIPBOARD_PASTE'}).then(function () {
-          $scope.draftMessage.files = blobs;
-          $scope.draftMessage.isMedia = true;
-        });
+      function onPastedImageEvent (e) {
+        var element = (e.originalEvent || e).target,
+            src = (element || {}).src || '',
+            remove = false;
+
+        if (src.substr(0, 5) == 'data:') {
+          remove = true;
+          var blob = dataUrlToBlob(src);
+          ErrorService.confirm({type: 'FILE_CLIPBOARD_PASTE'}).then(function () {
+            $scope.draftMessage.files = [blob];
+            $scope.draftMessage.isMedia = true;
+          });
+          setZeroTimeout(function () {
+            element.parentNode.removeChild(element);
+          })
+        }
+        else if (src && !src.match(/img\/blank\.gif/)) {
+          var replacementNode = document.createTextNode(' ' + src + ' ');
+          setTimeout(function () {
+            element.parentNode.replaceChild(replacementNode, element);
+          }, 100);
+        }
       };
 
       function onPasteEvent (e) {
@@ -1268,7 +1312,7 @@ angular.module('myApp.directives', ['myApp.filters'])
           if (e.type == 'dragenter' || e.type == 'dragover') {
             if (dragStateChanged) {
               $(dropbox)
-                .css({height: messageFieldWrap.offsetHeight + 2, width: messageFieldWrap.offsetWidth})
+                .css({height: editorElement.offsetHeight + 2, width: editorElement.offsetWidth})
                 .show();
             }
           } else {
@@ -1291,11 +1335,15 @@ angular.module('myApp.directives', ['myApp.filters'])
 
 
       $scope.$on('$destroy', function cleanup() {
+        $('body').off('dragenter dragleave dragover drop', onDragDropEvent);
         $(document).off('paste', onPasteEvent);
         $(document).off('keydown', onKeyDown);
-        $('body').off('dragenter dragleave dragover drop', onDragDropEvent);
-        $(submitBtn).off('mousedown touchstart');
+        $(submitBtn).off('mousedown')
         fileSelects.off('change');
+        if (richTextarea) {
+          $(richTextarea).off('DOMNodeInserted keyup', onPastedImageEvent);
+        }
+        $(editorElement).off('keydown');
       });
 
       if (!Config.Navigator.touch) {
@@ -1580,68 +1628,6 @@ angular.module('myApp.directives', ['myApp.filters'])
     }
   })
 
-  .directive('myLoadSticker', function(MtpApiFileManager, FileManager) {
-
-    var emptySrc = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-
-    return {
-      link: link,
-      scope: {
-        document: '='
-      }
-    };
-
-    function link ($scope, element, attrs) {
-      var imgElement = element;
-
-      var setSrc = function (blob) {
-        if (WebpManager.isWebpSupported()) {
-          imgElement.attr('src', FileManager.getUrl(blob, 'image/webp'));
-          return;
-        }
-        FileManager.getByteArray(blob).then(function (bytes) {
-          imgElement.attr('src', WebpManager.getPngUrlFromData(bytes));
-        });
-      };
-
-      imgElement.css({
-        width: $scope.document.thumb.width,
-        height: $scope.document.thumb.height
-      });
-
-      var smallLocation = $scope.document.thumb.location;
-      var fullLocation = {
-        _: 'inputDocumentFileLocation',
-        id: $scope.document.id,
-        access_hash: $scope.document.access_hash,
-        dc_id: $scope.document.dc_id
-      };
-
-
-      var cachedBlob = MtpApiFileManager.getCachedFile(fullLocation);
-      var fullDone = false;
-      if (!cachedBlob) {
-        cachedBlob = MtpApiFileManager.getCachedFile(smallLocation);
-      } else {
-        fullDone = true;
-      }
-      if (cachedBlob) {
-        setSrc(cachedBlob);
-        if (fullDone) {
-          return;
-        }
-      } else {
-        imgElement.attr('src', emptySrc);
-      }
-
-      MtpApiFileManager.downloadFile($scope.document.dc_id, fullLocation, $scope.document.size).then(function (blob) {
-        setSrc(blob);
-      }, function (e) {
-        console.log('Download sticker failed', e, fullLocation);
-      });
-    }
-  })
-
   .directive('myLoadDocument', function(MtpApiFileManager, AppDocsManager, FileManager) {
 
     return {
@@ -1811,7 +1797,7 @@ angular.module('myApp.directives', ['myApp.filters'])
           return false;
         }
         setTimeout(function () {
-          setFieldSelection(element[0]);
+          element[0].focus();
         }, 100);
       }
     };
@@ -1825,7 +1811,7 @@ angular.module('myApp.directives', ['myApp.filters'])
             return false;
           }
           onContentLoaded(function () {
-            setFieldSelection(element[0]);
+            element[0].focus();
           });
         });
       }
@@ -2090,17 +2076,10 @@ angular.module('myApp.directives', ['myApp.filters'])
         userID = $scope.$eval(attrs.myUserLink);
         update();
       }
-      if (!attrs.noWatch) {
-        $scope.$on('user_update', function (e, updUserID) {
-          if (userID == updUserID) {
-            update();
-          }
-        });
-      }
     }
   })
 
-  .directive('myUserStatus', function ($filter, AppUsersManager) {
+  .directive('myUserStatus', function ($filter, $rootScope, AppUsersManager) {
 
     var statusFilter = $filter('userStatus'),
         ind = 0,
@@ -2132,142 +2111,11 @@ angular.module('myApp.directives', ['myApp.filters'])
         userID = newUserID;
         update();
       });
-      $scope.$on('user_update', function (e, updUserID) {
+      $rootScope.$on('user_update', function (e, updUserID) {
         if (userID == updUserID) {
           update();
         }
       });
-      statuses[curInd] = update;
-      $scope.$on('$destroy', function () {
-        delete statuses[curInd];
-      });
-    }
-  })
-
-  .directive('myChatLink', function ($timeout, AppChatsManager) {
-
-    return {
-      link: link
-    };
-
-    function link($scope, element, attrs) {
-      var chatID;
-      var update = function () {
-        var chat = AppChatsManager.getChat(chatID);
-
-        element.html(
-          (chat.rTitle || '').valueOf()
-        )
-      };
-
-      if (element[0].tagName == 'A') {
-        element.on('click', function () {
-          AppChatsManager.openChat(chatID);
-        });
-      }
-
-      if (attrs.chatWatch) {
-        $scope.$watch(attrs.myChatLink, function (newChatID) {
-          chatID = newChatID;
-          update();
-        });
-      } else {
-        chatID = $scope.$eval(attrs.myChatLink);
-        update();
-      }
-
-      $scope.$on('chat_update', function (e, updChatID) {
-        if (chatID == updChatID) {
-          update();
-        }
-      });
-    }
-  })
-
-  .directive('myChatStatus', function ($rootScope, _, MtpApiManager, AppChatsManager, AppUsersManager) {
-
-    var ind = 0;
-    var statuses = {};
-
-    var allPluralize = _.pluralize('group_modal_pluralize_participants');
-    var onlinePluralize = _.pluralize('group_modal_pluralize_online_participants');
-
-    var myID = 0;
-    MtpApiManager.getUserID().then(function (newMyID) {
-      myID = newMyID;
-    });
-
-    setInterval(updateAll, 90000);
-
-    return {
-      link: link
-    };
-
-    function updateAll () {
-      angular.forEach(statuses, function (update) {
-        update();
-      });
-    }
-
-    function link($scope, element, attrs) {
-      var chatID;
-      var curInd = ind++;
-      var participantsCount = 0;
-      var participants = {};
-
-      var updateParticipants = function () {
-        participantsCount = 0;
-        participants = {};
-        if (!chatID) {
-          return;
-        }
-        AppChatsManager.getChatFull(chatID).then(function (chatFull) {
-          var participantsVector = (chatFull.participants || {}).participants || [];
-          participantsCount = participantsVector.length;
-          angular.forEach(participantsVector, function (participant) {
-            participants[participant.user_id] = true;
-          });
-          update();
-        });
-      };
-
-      var update = function () {
-        var html = allPluralize(participantsCount);
-        var onlineCount = 0;
-        var wasMe = false;
-        angular.forEach(participants, function (t, userID) {
-          var user = AppUsersManager.getUser(userID);
-          if (user.status && user.status._ == 'userStatusOnline') {
-            if (user.id == myID) {
-              wasMe = true;
-            }
-            onlineCount++;
-          }
-        });
-        if (onlineCount > 1 || onlineCount == 1 && !wasMe) {
-          html = _('group_modal_participants', {total: html, online: onlinePluralize(onlineCount)});
-        }
-
-        element.html(html);
-      };
-
-      $scope.$watch(attrs.myChatStatus, function (newChatID) {
-        chatID = newChatID;
-        updateParticipants();
-      });
-
-      $rootScope.$on('chat_full_update', function (e, updChatID) {
-        if (chatID == updChatID) {
-          updateParticipants();
-        }
-      });
-
-      $rootScope.$on('user_update', function (e, updUserID) {
-        if (participants[updUserID]) {
-          update();
-        }
-      });
-
       statuses[curInd] = update;
       $scope.$on('$destroy', function () {
         delete statuses[curInd];
@@ -2488,8 +2336,8 @@ angular.module('myApp.directives', ['myApp.filters'])
 
           downloadPromise.then(function () {
             onContentLoaded(function () {
-              var errorListenerEl = $('audio', element)[0] || element[0];
-              if (errorListenerEl) {
+              var audioEl = $('audio', element)[0];
+              if (audioEl) {
                 var errorAlready = false;
                 var onAudioError = function (event) {
                   if (errorAlready) {
@@ -2509,18 +2357,16 @@ angular.module('myApp.directives', ['myApp.filters'])
                   }
                 };
 
-                errorListenerEl.addEventListener('error', onAudioError, true);
-                $scope.$on('$destroy', function () {
+                audioEl.addEventListener('error', onAudioError, true);
+                $(audioEl).on('$destroy', function () {
                   errorAlready = true;
-                  errorListenerEl.removeEventListener('error', onAudioError);
+                  audioEl.removeEventListener('error', onAudioError);
                 });
               }
-              setTimeout(function () {
-                checkPlayer($scope.mediaPlayer.player);
-                $scope.mediaPlayer.player.setVolume(audioVolume);
-                $scope.mediaPlayer.player.play();
-              }, 300);
-            });
+              checkPlayer($scope.mediaPlayer.player);
+              $scope.mediaPlayer.player.setVolume(audioVolume);
+              $scope.mediaPlayer.player.play();
+            })
           })
         }
       };
@@ -2727,6 +2573,7 @@ angular.module('myApp.directives', ['myApp.filters'])
         var ev = attrs.myScrollToOn;
         var doScroll = function () {
           onContentLoaded(function () {
+            console.log(111,element, element.offset().top);
             $('html, body').animate({
               scrollTop: element.offset().top
             }, 200);

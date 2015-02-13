@@ -1,5 +1,5 @@
 /*!
- * Webogram v0.4.0 - messaging web application for MTProto
+ * Webogram v0.3.9 - messaging web application for MTProto
  * https://github.com/zhukov/webogram
  * Copyright (C) 2014 Igor Zhukov <igor.beatle@gmail.com>
  * https://github.com/zhukov/webogram/blob/master/LICENSE
@@ -467,14 +467,6 @@ angular.module('izhukov.mtproto.wrapper', ['izhukov.utils', 'izhukov.mtproto'])
             writeFileDeferred;
         if (fileWriter.length) {
           startOffset = fileWriter.length;
-          if (startOffset >= size) {
-            if (toFileEntry) {
-              deferred.resolve(fileWriter.finalize());
-            } else {
-              deferred.resolve(cachedDownloads[fileName] = fileWriter.finalize());
-            }
-            return;
-          }
           fileWriter.seek(startOffset);
           deferred.notify({done: startOffset, total: size});
         }
@@ -492,7 +484,6 @@ angular.module('izhukov.mtproto.wrapper', ['izhukov.utils', 'izhukov.mtproto'])
               }, {
                 dcID: dcID,
                 fileDownload: true,
-                singleInRequest: true,
                 createNetworker: true
               });
             }, 2).then(function (result) {

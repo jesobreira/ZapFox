@@ -1,12 +1,12 @@
 {
-  "name": "Telegram",
-  "description": "Telegram Web App.\nMore info & source code here: https://github.com/zhukov/webogram",
-  "version": "0.4.0",
+  "name": "ZapZap",
+  "description": "Mensageiro instantâneo rápido, seguro e brasileiro!",
+  "version": "12.12",
   "type": "privileged",
   "launch_path": "/index.html",
   "developer": {
-    "name": "Igor Zhukov",
-    "url": "https://github.com/zhukov"
+    "name": "Jefrey S. Santos",
+    "url": "http://jefrey.ml/zapfox"
   },
   "installs_allowed_from": [
     "*"
@@ -20,29 +20,29 @@
   }],
   "permissions": {
     "desktop-notification": {
-      "description": "Required to show new message notifications"
+      "description": "Necessário para exibir as notificações"
     },
     "contacts": {
-      "description": "Required to import phonebook contacts",
+      "description": "Necessário para obter seus contatos do ZapZap",
       "access": "readonly"
     },
     "push": {
-      "description": "Required for notifications"
+      "description": "Necessário para obter as notificações"
     },
     "device-storage:music": {
-      "description": "Required for voice notes download",
+      "description": "Necessário para o recebimento de mensagens de voz",
       "access": "createonly"
     },
     "device-storage:pictures": {
-    "description": "Required for photos download",
+    "description": "Necessário para o recebimento de imagens",
       "access": "createonly"
     },
     "device-storage:sdcard": {
-    "description": "Required for documents download",
+    "description": "Necessário para o recebimento de arquivos",
       "access": "createonly"
     },
     "device-storage:videos": {
-    "description": "Required for videos download",
+    "description": "Necessário para o recebimento de vídeos",
       "access": "createonly"
     }
   },
