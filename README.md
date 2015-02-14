@@ -1,75 +1,81 @@
-[![Stories in Ready](https://badge.waffle.io/zhukov/webogram.png?label=ready&title=Ready)](https://waffle.io/zhukov/webogram)
-## [Webogram](https://web.telegram.org) — Telegram Web App
+[![Stories in Ready](https://badge.waffle.io/jesobreira/ZapFox.png?label=ready&title=Ready)](https://waffle.io/jesobreira/ZapFox)
+## ZapFox — Cliente ZapZap para Firefox OS
 
-Telegram offers great [apps for mobile communication](https://www.telegram.org). It is based on the [MTProto protocol](https://core.telegram.org/mtproto) and has an [Open API](https://core.telegram.org/api). I personally like Telegram for its speed and cloud-support (that makes a web app possible, unlike in the case of WA and others).
-
-MTProto data can be carried over HTTP (SSL is also supported), so this project is my take at creating one.
-
-That said, I'm using this app myself and I'd like to share its sources, so anyone can contribute to the development. Any help is welcome!
+Este aplicativo é um fork do [Telegram/Webogram](https://github.com/zhukov/webogram/) com estilo alterado para ser similar ao [ZapZap](http://zapzap.gratis).
 
 
 ### Interface
 
 
-Here are some screenshots of the interface:
+Aqui estão alguns screenshots do aplicativo:
 
 
-![Sample screenshot 1](/app/img/screenshot1.png)
-![Mobile screenshot 2](/app/img/screenshot2.png)
-![Mobile screenshot 3](/app/img/screenshot3.png)
+![Adicionar novo contato](/app/img/screenshot/1.png)
+![Informação do contato](/app/img/screenshot/2.png)
+![Conversa](/app/img/screenshot/3.png)
 
 
-### Unsupported at the moment
+### Ainda não suportado
 
-* Secret chats
-* Black list
-* ...
+* Chats secretos
+* Lista negra
+* Mensagens autodestrutivas
+* ZapMapa (check-in)
+* ZapGrupos
+* ZapMural
+
+Nota: esses 3 últimos encontram-se com problemas. Os mesmos já foram reportados à PrivateHost e o desenvolvimento ***não*** deve iniciar até que os mesmos sejam corrigidos.
 
 
 ### Maintained locations
 
 
-| Description        | URL           | Type  |
+| Descrição        | URL           | Tipo  |
 | ------------- |-------------| -----:|
-| Online Web-version (hosted on Telegram servers)      | https://web.telegram.org/ | hosted
-| Online Web-version (hosted on GitHub pages)      | https://zhukov.github.io/webogram | hosted
-| Chrome Web Store      | [https://chrome.google.com/webstore/detail/telegram/ clhhggbfdinjmjhajaheehoeibfljjno](https://chrome.google.com/webstore/detail/telegram/clhhggbfdinjmjhajaheehoeibfljjno) |   packed
-| Firefox & FirefoxOS Marketplace | https://marketplace.firefox.com/app/telegram |    packed
+| Versão web online (hospedado no Meu ZapZap)      | http://meu.zapzap.gratis/ | hosted
+| Versão web online (hospedado no Github Pages)      | https://jesobreira.github.io/ZapFox | hosted
+| Firefox & FirefoxOS Marketplace | https://marketplace.firefox.com/app/zapfox |    packed
 
 
 
-**Hosted version**: the app is downloaded via HTTPS as a usual website. Will be available offline due to application cache.
+**Hosted**: o aplicativo é aberto como um website comum. Pode funcionar off-line devido ao cache.
 
-**Packed version**: the app is downloaded at once in a package via HTTPS. The package is updated less frequently than the Web-version.
+**Packed**: o aplicativo é baixado para o dispositivo.
 
-All of the apps above are submitted and maintained by [@zhukov](https://github.com/zhukov), so feel free to use them and report bugs [here](https://github.com/zhukov/webogram/issues). Please do not report bugs which reproduce only in different locations.
+## Bugs
 
-
-## Technical details
-
-The app is based on AngularJS JavaScript framework, written in pure JavaScript. jQuery is used for DOM manipulations, and Bootstrap is the CSS-framework.
+O projeto Webogram foi desenvolvido por [@zhukov](https://github.com/zhukov), então fique à vontade para relatar problemas relacionados com a funcionalidade do aplicativo [aqui](https://github.com/zhukov/webogram/issues). Bugs a respeito do visual do aplicativo podem ser reportados [aqui](https://github.com/jesobreira/ZapFox/issues).
 
 
-### Running locally
+## Detalhes técnicos
+
+Este aplicativo faz uso do framework AngularJS, escrito puramente em Javascript. jQuery é utilizado para manipulações do DOM, e Bootstrap é o framework CSS.
 
 
-#### Running web-server
+#### Rodando localmente pelo servidor web
 
-Project repository is based on angularjs-seed and includes a simple web-server, so it's easy to launch the app locally on your desktop.
-Install [node.js](http://nodejs.org/) and run `node server.js`. Open page http://localhost:8000/app/index.html in your browser.
+O webogram não faz uso de linguagens server-side. Desta forma, qualquer servidor web (Apache, nginx etc.) está habituado a rodá-lo. Se você não tiver um servidor web instalado, o repositório inclui um servidor bem simples, mas é suficiente para executar o prgorama.
 
-#### Running as Chrome Packaged App
+Para rodar este servidor, instale o [node.js](http://nodejs.org/) e execute `node server.js`. Em seguida, abra http://localhost:81/app/index.html em seu navegador.
 
-To run this application in Google Chrome browser as a packaged app, open this URL in Chrome: `chrome://extensions/`, then tick "Developer mode" and press "Load unpacked extension...". Select the downloaded `app` folder and Webogram application should appear in the list.
+#### Rodando como uma extensão do Google Chrome
 
-#### Running as Firefox OS App
+Para rodar essa aplicação no Google Chrome como uma extensão, abra essa URL no Chrome: `chrome://extensions/`. Após, clique em "Modo do desenvolvedor" > "Carregar extensão...". Selecione a pasta "app" do repositório e o ZapZap aparecerá na lista.
 
-To run this application in Firefox as a packaged app, open "Menu" -> "Developer" -> "WebIDE" (or use `Shift + F8` shortcut). Choose "Open packaged app" from Project menu and select `app` folder.
+#### Rodando como aplicação Firefox OS
+
+Para rodar essa aplicação no Firefox, pressione Alt, abra Menu > Desenvolvedor > WebIDE (ou pressione `Shift + F8`). Escolha "Abrir aplicativo empacotado" do menu Projeto e selecione a pasta "app" do repositório.
+
+### Preparando para distribuição
+
+O aplicativo, apesar de completamente funcional, é bloqueado em algumas plataformas, como o Firefox OS, devido às políticas de [CSP](https://developer.mozilla.org/pt-BR/Apps/CSP).
+
+O repositório traz um diretório "dist", onde se encontra o aplicativo já compilado. Entretanto, as modificações deverão ser feitas no diretório "app" e, após tais modificações, o mesmo deverá ser compilado. Leia a página [Compilando](https://github.com/jesobreira/ZapFox/wiki/Compilando) na Wiki para obter instruções.
 
 
-### Third party libraries
+### Bibliotecas de terceiros
 
-Besides frameworks mentioned above, other libraries are used for protocol and UI needs. Here is the short list:
+Além dos frameworks supracitados, outras bibliotecas foram usadas para suprir as necessidades do protocolo e da interface gráfica. Aqui estão algumas delas:
 
 * [JSBN](http://www-cs-students.stanford.edu/~tjw/jsbn/)
 * [CryptoJS](https://code.google.com/p/crypto-js/)
@@ -79,13 +85,14 @@ Besides frameworks mentioned above, other libraries are used for protocol and UI
 * [nanoScrollerJS](https://github.com/jamesflorentino/nanoScrollerJS)
 * [gemoji](https://github.com/github/gemoji)
 * [emoji-data](https://github.com/iamcal/emoji-data)
+ 
 
-Many thanks to all these libraries' authors and contributors. Detailed list with descriptions and licenses is available [here](/app/vendor).
-
-
-### Licensing
-
-The source code is licensed under GPL v3. License is available [here](/LICENSE).
+Nossos sinceros agradecimentos a todos os autores e contribuintes dessas bibliotecas. A lista detalhada com descrições e licenças está disponível [aqui](/app/vendor).
 
 
-### [Contribute](CONTRIBUTING.md)
+### Licença
+
+Este código está licenciado sob a licença GPL v3. A licença está disponível [aqui](/LICENSE).
+
+
+### [Contribua](CONTRIBUTING.md)

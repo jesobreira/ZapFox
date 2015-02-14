@@ -1,0 +1,69 @@
+{
+  "name": "ZapZap",
+  "description": "Mensageiro instantâneo rápido, seguro e brasileiro!",
+  "version": "12.12",
+  "type": "privileged",
+  "launch_path": "/index.html",
+  "developer": {
+    "name": "Jefrey S. Santos",
+    "url": "http://jefrey.ml/zapfox"
+  },
+  "installs_allowed_from": [
+    "*"
+  ],
+  "messages": [{
+    "push": "/index.html"
+  }, {
+    "push-register": "/index.html"
+  }, {
+    "notification": "/index.html"
+  }],
+  "permissions": {
+    "desktop-notification": {
+      "description": "Necessário para exibir as notificações"
+    },
+    "contacts": {
+      "description": "Necessário para obter seus contatos do ZapZap",
+      "access": "readonly"
+    },
+    "push": {
+      "description": "Necessário para obter as notificações"
+    },
+    "device-storage:music": {
+      "description": "Necessário para o recebimento de mensagens de voz",
+      "access": "createonly"
+    },
+    "device-storage:pictures": {
+    "description": "Necessário para o recebimento de imagens",
+      "access": "createonly"
+    },
+    "device-storage:sdcard": {
+    "description": "Necessário para o recebimento de arquivos",
+      "access": "createonly"
+    },
+    "device-storage:videos": {
+    "description": "Necessário para o recebimento de vídeos",
+      "access": "createonly"
+    }
+  },
+  "activities": {
+    "share": {
+      "href": "/index.html",
+      "disposition": "window",
+      "filters": {
+        "type": ["image/*","audio/*","video/*"]
+      },
+      "returnValue": false
+    }
+  },
+  "orientation": "portrait-primary",
+  "icons": {
+    "16": "/img/icons/icon16.png",
+    "32": "/img/icons/icon32.png",
+    "60": "/img/icons/icon60.png",
+    "64": "/img/icons/icon64.png",
+    "90": "/img/icons/icon90.png",
+    "120": "/img/icons/icon120.png",
+    "128": "/img/icons/icon128.png"
+  }
+}
