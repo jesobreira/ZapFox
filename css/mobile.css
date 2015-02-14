@@ -29,7 +29,7 @@ html {
   margin: 0;
 }
 .tg_page_head .navbar-inverse {
-  background: #5682a3;
+  background: #009648;
   border: 0;
 
   -webkit-box-shadow: 0px 1px 1px rgba(0, 0, 0, 0.11);
@@ -1105,7 +1105,7 @@ a.mobile_modal_action .tg_checkbox_label {
   display: block;
 }
 
-.composer_emoji_insert_btn {
+.im_emoji_btn {
   position: absolute;
   left: 0;
   top: 0;
@@ -1127,10 +1127,10 @@ a.mobile_modal_action .tg_checkbox_label {
 .is_1x .icon-emoji {
   background-image: url(../img/icons/IconsetW_1x.png);
 }
-.composer_emoji_insert_btn:active .icon-emoji,
-.is_1x .composer_emoji_insert_btn:active .icon-emoji,
-.composer_emoji_insert_btn.on .icon-emoji,
-.is_1x .composer_emoji_insert_btn.on .icon-emoji {
+.im_emoji_btn:active .icon-emoji,
+.is_1x .im_emoji_btn:active .icon-emoji,
+.im_emoji_btn.on .icon-emoji,
+.is_1x .im_emoji_btn.on .icon-emoji {
   background-position: -10px -803px;
 }
 
@@ -1141,21 +1141,21 @@ a.mobile_modal_action .tg_checkbox_label {
 .im_send_field_wrap .form-control {
   border-radius: 4px;
 }
-.composer_rich_textarea {
+.emoji-wysiwyg-editor {
   min-height: 18px;
   max-height: 136px;
   margin-bottom: 0;
   font-size: 15px;
 }
-.composer_rich_textarea:empty {
+.emoji-wysiwyg-editor:empty {
   background: #f1f1f1;
   border-color: #f1f1f1;
 }
-.composer_rich_textarea:empty:before {
+.emoji-wysiwyg-editor:empty:before {
   color: #999;
 }
-.composer_rich_textarea:active,
-.composer_rich_textarea:focus {
+.emoji-wysiwyg-editor:active,
+.emoji-wysiwyg-editor:focus {
   box-shadow: none;
   outline: 0;
   background: #FFF;
@@ -1164,32 +1164,16 @@ a.mobile_modal_action .tg_checkbox_label {
 }
 
 
-.composer_emoji_tooltip {
-  margin-left: 10px;
-  margin-top: -175px;
+.emoji-menu {
+  margin-left: -20px;
+  margin-top: -202px;
   width: 262px;
 }
-.composer_emoji_tooltip .composer_emoji_tooltip_content {
+.emoji-menu .emoji-items-wrap {
   height: 106px;
 }
-.composer_emoji_tooltip .composer_emoji_tooltip_content .composer_emoji_btn {
+.emoji-menu .emoji-items a {
   padding: 5px;
-}
-.icon-tooltip-tail {
-  display: none;
-}
-.composer_emoji_tooltip_tab {
-  margin: 0 5px;
-}
-
-.composer_sticker_btn {
-  width: 80px;
-  height: 80px;
-  padding: 3px;
-}
-.composer_sticker_image {
-  max-width: 64px;
-  max-height: 64px;
 }
 
 
